@@ -1,7 +1,7 @@
 package Practica_3_4;
 
 import java.util.ArrayList;
-import java.util.regex.Pattern;
+import java.util.StringTokenizer;
 import java.sql.*;
 
 public class Recursividad {
@@ -17,50 +17,53 @@ public class Recursividad {
     
     //4.2
     public static String invertirPalabras(String frase) {
-        Pattern patron = Pattern.compile("[\\s\\t\\n\\p{Punct}]");
-        String[] palabras = patron.split(frase);
-
-        StringBuilder resultado = new StringBuilder();
-        for (int i = palabras.length - 1; i >= 0; i--) {
-            resultado.append(invertirPalabra(palabras[i])).append(" ");
-        }
-        return resultado.toString().trim(); // Eliminamos el espacio adicional al final
-    }
-
-    private static String invertirPalabra(String palabra) {
-        if (palabra.isEmpty() || palabra.length() == 1) {
-            return palabra;
+    	StringTokenizer tknr = new StringTokenizer(frase, " \t\n\r\f,.:;!?");
+        
+    	if (!tknr.hasMoreTokens()) {
+            return frase; 
         } else {
-            return invertirPalabra(palabra.substring(1)) + palabra.charAt(0);
+        	String palabra = tknr.nextToken();
+            int index = frase.indexOf(palabra) + palabra.length();
+            String restoFrase = (index < frase.length()) ? frase.substring(index) : "";
+
+            return invertirPalabras(restoFrase) + " " + palabra;
         }
     }
     
     //4.3
-    public static void posiblesManos(int n, ArrayList<Carta> baraja, ArrayList<Carta> manoActual, int index) {
+    public static ArrayList<Carta> manoActual = new ArrayList<>();
+    public static ArrayList<ArrayList<Carta>> manos = new ArrayList<>();
+    
+    public static ArrayList<ArrayList<Carta>> posiblesManos(int n, ArrayList<Carta> baraja, int index) {
         if (manoActual.size() == n) {
             System.out.println(manoActual);
-            return;
+            return manos;
         }
 
         for (int i = index; i < baraja.size(); i++) {
-            manoActual.add(baraja.get(i)); 
-            posiblesManos(n, baraja, manoActual, i + 1); 
-            manoActual.remove(manoActual.size() - 1); 
+        	Carta carta = baraja.get(i);
+        	if(!manoActual.contains(carta)) {
+        		manoActual.add(carta); 
+                posiblesManos(n, baraja, i + 1); 
+                manoActual.remove(manoActual.size() - 1); 
+        	}     
         }
+        return manos;
     }
     
     //4.4
-    public static void filtraManos(int n, ArrayList<Carta> baraja, ArrayList<Carta> manoActual, int index) {
-        if (manoActual.size() == n) {
-            boolean cumpleCondicion = false;
-            for (Carta carta : manoActual) {
-                if (carta.esAs()) {
-                    cumpleCondicion = true;
-                    break;
-                }
-            }
-            
-            if (cumpleCondicion) {
+    public static void filtraManos(int n, ArrayList<Carta> baraja, String condicion) {
+        if (n <= 0 || baraja.isEmpty()) {
+            System.out.println("Esta entrada no es válida.");
+            return;
+        }
+        ArrayList<Carta> manoActual = new ArrayList<>();
+        filtrarManosRcr(n, baraja, manoActual, 0, condicion);
+    }
+    
+    private static void filtrarManosRcr(int n, ArrayList<Carta> baraja, ArrayList<Carta> manoActual, int index, String condicion) {
+        if (n == 0) {
+            if (cumpleCond(manoActual, condicion)) {
                 System.out.println(manoActual);
             }
             return;
@@ -68,59 +71,71 @@ public class Recursividad {
 
         for (int i = index; i < baraja.size(); i++) {
             manoActual.add(baraja.get(i));
-            filtraManos(n, baraja, manoActual, i + 1);
+            filtrarManosRcr(n - 1, baraja, manoActual, i + 1, condicion);
             manoActual.remove(manoActual.size() - 1);
         }
     }
-    
-    //4.5
-    private static Connection obtenerConexion() throws SQLException {
-    	Connection conexion = null;
 
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-
-            String url = "jdbc:mysql://localhost:3306/nombre_base_datos?useSSL=false";
-            String usuario = "tu_usuario";
-            String contraseña = "tu_contraseña";
-
-            conexion = DriverManager.getConnection(url, usuario, contraseña);
-        } catch (ClassNotFoundException | SQLException e) {
-            e.printStackTrace();
-            throw new SQLException("Error al conectar con la base de datos");
-        }
-
-        return conexion;
-    }
-
-    public static void guardaManos(String filtro, String mano) {
-        Connection conexion = null;
-        PreparedStatement statement = null;
-
-        try {
-            conexion = obtenerConexion();
-            String sql = "INSERT INTO ManoFiltro (filtro, mano) VALUES (?, ?)";
-            statement = conexion.prepareStatement(sql);
-            statement.setString(1, filtro);
-            statement.setString(2, mano);
-            statement.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                if (statement != null) {
-                    statement.close();
-                }
-                if (conexion != null) {
-                    conexion.close();
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
+    private static boolean cumpleCond(ArrayList<Carta> mano, String condicion) {
+        for (Carta carta : mano) {
+            if (carta.getValor().equals(condicion)) {
+                return true;
             }
         }
+        return false;
     }
     
+    //4.5
+    private static final String URL = "jdbc:sqlite:baraja.db";
+
+    public static void guardaManos(int n, ArrayList<Carta> baraja, String condicion, String nombreFiltro) {
+        if (n <= 0 || baraja.isEmpty()) {
+            System.out.println("Entrada no válida.");
+            return;
+        }
+
+        ArrayList<Carta> manoActual = new ArrayList<>();
+        filtrarYGuardarManos(n, baraja, manoActual, 0, condicion, nombreFiltro);
+    }
     
+    private static void filtrarYGuardarManos(int n, ArrayList<Carta> baraja, ArrayList<Carta> manoActual2, int index, String condicion, String nombreFiltro) {
+    	if (n == 0) {
+            if (cumpleCond(manoActual, condicion)) {
+                guardarManoEnDB(manoActual, condicion, nombreFiltro);
+            }
+            return;
+        }
+
+        for (int i = index; i < baraja.size(); i++) {
+            manoActual.add(baraja.get(i));
+            filtrarYGuardarManos(n - 1, baraja, manoActual, i + 1, condicion, nombreFiltro);
+            manoActual.remove(manoActual.size() - 1);
+        }
+	}
+    
+    private static void guardarManoEnDB(ArrayList<Carta> mano, String condicion, String nombreFiltro) {
+        try (Connection conn = DriverManager.getConnection(URL)) {
+            String createTableSQL = "CREATE TABLE IF NOT EXISTS Manos (id INTEGER PRIMARY KEY AUTOINCREMENT, Carta TEXT, Condicion TEXT, Filtro TEXT)";
+            try (PreparedStatement createTableStatement = conn.prepareStatement(createTableSQL)) {
+                createTableStatement.executeUpdate();
+            }
+
+            PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Manos (Carta, Condicion, Filtro) VALUES (?, ?, ?)");
+
+            for (Carta carta : mano) {
+                pstmt.setString(1, carta.toString());
+                pstmt.setString(2, condicion);
+                pstmt.setString(3, nombreFiltro);
+                pstmt.executeUpdate();
+            }
+
+            System.out.println("Mano guardada en la base de datos.");
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+      
     public static void main(String[] args) {
     	//4.1
         String frase1 = "Hola, mundo!";
@@ -141,19 +156,23 @@ public class Recursividad {
         //4.3
         
         ArrayList<Carta> baraja = new ArrayList<>();
+        baraja.add(new Carta("Corazones", "As"));
+        baraja.add(new Carta("Diamantes", "Reina"));
+        baraja.add(new Carta("Picas", "7"));
+        baraja.add(new Carta("Tréboles", "10"));
+        System.out.println("Baraja creada: " + baraja);
         
         int n = 3;
         System.out.println("Posibles manos de " + n + " cartas:");
-        posiblesManos(n, baraja, new ArrayList<>(), 0);
+        posiblesManos(n, baraja, 0);
         
         //4.4
         System.out.println("Manos que incluyen al menos un As:");
-        filtraManos(n, baraja, new ArrayList<>(), 0);
+        filtraManos(n, baraja, "As");
         
         //4.5
-        String filtro = "Poker";
-        String mano = "[As, As, As, As, 10]";
-        guardaManos(filtro, mano);
-    
+        guardaManos(2, baraja, "As", "Poker");
+        guardaManos(5, baraja, "Reina", "Full");
+        guardaManos(5, baraja, "Picas", "Escalera");           
     }
 }
